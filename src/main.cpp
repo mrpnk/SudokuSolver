@@ -49,8 +49,11 @@ bool is_number(const std::string& s)
 
 
 
-void main()
+int main(int argc, char* argv[])
 {
+	std::cout << "Current path is " << std::filesystem::current_path() << std::endl << std::endl;
+
+	using namespace SudokuSolving;
 	//for (int i = 0; i < 16; i++)
 	//{
 	//	for (int j = 0; j < 16; j++)
@@ -64,12 +67,12 @@ void main()
 	{
 		// Scan for sudoku files:
 		std::vector<std::string> files;
-		for (const auto& entry : std::filesystem::directory_iterator(""))
+		for (const auto& entry : std::filesystem::directory_iterator(std::filesystem::current_path()))
 		{
 			auto filename = entry.path().string();
 			if (filename.rfind(".txt") != -1)
 			{
-				std::cout << files.size() << "   " << entry.path() << std::endl;
+				std::cout << files.size() << "   " << entry.path().filename() << std::endl;
 				files.push_back(filename);
 			}
 		}
@@ -105,6 +108,11 @@ void main()
 		initialCalcHints(&s);
 		s.out_hints();
 
+		// Load solvers:
+		NakedSolver  nakedsol;
+		HiddenSolver hiddensol;
+		FishSolver	 fishsol;
+
 		// Interactively solve the Sudoku:
 		std::string input;
 		while (!s.isSolved())
@@ -122,15 +130,15 @@ void main()
 			int h0 = s.getNumHints();
 			if (input[0] == 'n')
 			{
-				naked(&s, order);
+				nakedsol.apply(&s, order);
 			}
 			else if (input[0] == 'h')
 			{
-				hidden(&s, order);
+				hiddensol.apply(&s, order);
 			}
 			else if (input[0] == 'f')
 			{
-				fish(&s, order);
+				fishsol.apply(&s, order);
 			}
 			else
 				continue;
@@ -146,4 +154,5 @@ void main()
 		std::cout << "Sudoku is solved!" << std::endl << std::endl;
 		std::cin.get();
 	}
+	return 0;
 }
