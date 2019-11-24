@@ -572,7 +572,7 @@ namespace SudokuSolving
 			}
 		}
 	}
-	uint16_t getPositions(Sudoku* s, Sudoku::Indexer* indexer, uint16_t hints)
+	uint16_t containingAll(Sudoku* s, Sudoku::Indexer* indexer, uint16_t hints)
 	{
 		// get the subindices of those cells, that contain all given hints
 		uint16_t positions = 0x0;
@@ -580,6 +580,18 @@ namespace SudokuSolving
 		{
 			uint16_t temp = s->cells[(*indexer)(i)].hints;
 			if ((temp & hints) == hints)
+				positions |= (1 << i);
+		}
+		return positions;
+	}
+	uint16_t containingAny(Sudoku* s, Sudoku::Indexer* indexer, uint16_t hints)
+	{
+		// get the subindices of those cells, that contain any of the given hints
+		uint16_t positions = 0x0;
+		for (int i = 0; i < s->nn(); i++)
+		{
+			uint16_t temp = s->cells[(*indexer)(i)].hints;
+			if (temp & hints)
 				positions |= (1 << i);
 		}
 		return positions;
@@ -638,7 +650,7 @@ namespace SudokuSolving
 		{
 			for (short h = 0; h < s->nn(); h++)
 			{
-				uint16_t thisPositions = getPositions(s, indexer, (1 << h));
+				uint16_t thisPositions = containingAll(s, indexer, (1 << h));
 				if (thisPositions == 0x0)
 					continue;
 
@@ -718,14 +730,23 @@ namespace SudokuSolving
 		{
 			if (z == 0)
 			{
-				results.push_back(hints);
-				results.push_back(positions);
+				// check if there are candidates to delete:
+				uint16_t delcands = 0x0;
+				for (int i = 0; i < s->nn(); i++)
+					if (positions & (1 << i))
+						delcands |= s->cells[(*indexer)(i)].hints;
+				delcands &= ~hints;
+				if (m == 1 || (bool)delcands)
+				{
+					results.push_back(hints);
+					results.push_back(positions);
+				}
 				return;
 			}
 
 			for (short h = start_hint; h < s->nn(); h++)
 			{
-				uint16_t thisPositions = getPositions(s, indexer, (1 << h));
+				uint16_t thisPositions = containingAll(s, indexer, (1 << h));
 				if (thisPositions == 0x0)
 					continue;
 
@@ -756,7 +777,11 @@ namespace SudokuSolving
 				s->markers[{s->getClm(cell), s->getRow(cell), 0}] = { iter - 1 };
 			}
 			else
-				changed |= eliminateHints(s, ~hints, indexer, nullptr, nullptr, positions);
+			{
+				int nelims = eliminateHints(s, ~hints, indexer, nullptr, nullptr, positions);
+				changed |= (bool)nelims;
+				std::cout << " -> eliminate " << nelims << " occurences";
+			}
 		}
 
 	public:
@@ -806,8 +831,13 @@ namespace SudokuSolving
 		{
 			if (z == 0)
 			{
-				results.push_back(hints);
-				results.push_back(positions);
+				// check if there are candidates to delete:
+				uint16_t delposis = containingAny(s, indexer, hints) & ~positions;
+				if (m == 1 || (bool)delposis)
+				{
+					results.push_back(hints);
+					results.push_back(positions);
+				}
 				return;
 			}
 
@@ -983,7 +1013,7 @@ namespace SudokuSolving
 					Sudoku::Indexer* indexer = s->getIndexer(t, j);
 
 					// if there is no given hint in this structure or a hint is also in an already chosen structure, this is invalid
-					uint16_t thisPositions = getPositions(s, indexer, hints);
+					uint16_t thisPositions = containingAll(s, indexer, hints);
 					if (thisPositions == 0x0 || intersects(s, indexer, positions, hints))
 						continue;
 
