@@ -109,15 +109,17 @@ int main(int argc, char* argv[])
 		s.out_hints();
 
 		// Load solvers:
-		NakedSolver  nakedsol;
-		HiddenSolver hiddensol;
-		FishSolver	 fishsol;
+		LockedSolver	lockedsol; 
+		HiddenSolver	hiddensol; 
+		NakedSolver		nakedsol;
+		FishSolver		fishsol;
+		BruteforceSolver brutsol;
 
 		// Interactively solve the Sudoku:
 		std::string input;
 		while (!s.isSolved())
 		{
-			std::cout << "Choose solving technique... (n = naked, h = hidden, f = fish)" << std::endl;
+			std::cout << "Choose solving technique... (l = locked, h = hidden, n = naked, f = fish, b = bruteforce)" << std::endl;
 			std::getline(std::cin, input);
 			if (input == "")
 				continue;
@@ -128,17 +130,25 @@ int main(int argc, char* argv[])
 
 			int v0 = s.getNumValues();
 			int h0 = s.getNumHints();
-			if (input[0] == 'n')
+			if (input[0] == 'l')
 			{
-				nakedsol.apply(&s, order);
+				lockedsol.apply(&s, order);
 			}
 			else if (input[0] == 'h')
 			{
 				hiddensol.apply(&s, order);
 			}
+			else if (input[0] == 'n')
+			{
+				nakedsol.apply(&s, order);
+			}
 			else if (input[0] == 'f')
 			{
 				fishsol.apply(&s, order);
+			}
+			else if (input[0] == 'b')
+			{
+				brutsol.apply(&s, order);
 			}
 			else
 				continue;

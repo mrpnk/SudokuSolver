@@ -3,6 +3,7 @@
 #include <deque>
 #include <tuple>
 #include <map>
+#include <array>
 
 namespace SudokuSolving
 {
@@ -110,6 +111,10 @@ namespace SudokuSolving
 		{
 			return nn_;
 		}
+		int nnn()
+		{
+			return nn_*n_;
+		}
 		void set(int x, int y, int value)
 		{
 			cells[y * nn_ + x].value = 1 << (value - 1);
@@ -127,7 +132,7 @@ namespace SudokuSolving
 		void out()
 		{
 			using namespace std;
-			std::vector<color> cols = { turque,orange,lblue,lpurple,green,red,yellow };
+			std::vector<color> cols = { turque,orange,lblue,lpurple,green,red,yellow,purple,blue,gray,gray };
 			int maxiter = 0;
 			for (int y = 0; y < nn_ + 1; y++)
 			{
@@ -162,8 +167,8 @@ namespace SudokuSolving
 		void out_hints()
 		{
 			std::vector<color> foreColors = { turque, orange, red, lgreen };
-			std::vector<color> backColors = { black, gray, blue };
-			int rowhl = 0, colhl = 0;
+			std::vector<color> backColors = { black, gray, blue, purple };
+			int rowhl = 0, colhl = 0, boxhl = 0;
 
 			using namespace std;
 			bool marked = false;
@@ -174,24 +179,25 @@ namespace SudokuSolving
 				rowhl = markers.contains({ -1,y,0 }) ? 1 : 0;
 				if (y < nn_)
 				{
-					for (int i = 0; i < n_; i++)
+					for (int iy = 0; iy < n_; iy++)
 					{
 						for (int x = 0; x < nn_; x++)
 						{
 							colhl = markers.contains({ x,-1,0 }) ? 1 : 0;
+							boxhl = markers.contains({ -1,-1,getBox(nn_*y+x) }) ? 1 : 0;
 							if (x == 0)
 								std::cout << setColor() << "|" << setColor(white, backColors[rowhl]) << "  ";
 							else if (x % n_ == 0)
 								std::cout << setColor(white, backColors[rowhl]) << "|  ";
 
-							for (int ii = 0; ii < n_; ii++)
+							for (int ix = 0; ix < n_; ix++)
 							{
-								short h = i * n_ + ii + 1;
+								short h = iy * n_ + ix + 1;
 								bool mark = markers.contains({ x,y,h });
 								marked |= mark;
 								auto& m = markers[{x, y, h}];
 								bool forced = !hint(x, y, h) && mark;
-								std::cout << setColor(mark ? foreColors[m.markGroup] : white, forced ? yellow: backColors[rowhl + colhl]) <<
+								std::cout << setColor(mark ? foreColors[m.markGroup] : white, forced ? yellow : backColors[rowhl + colhl + boxhl]) <<
 									((hint(x, y, h) || mark) ? to_string(h) : " ") << setColor(white, backColors[rowhl]);
 							}
 
@@ -205,7 +211,7 @@ namespace SudokuSolving
 				}
 			}
 			if (marked)
-				cout << "(" << setColor(foreColors[0]) << "base" << setColor() << ", " << setColor(foreColors[1]) << "cover" << setColor() << ", " << setColor(foreColors[2]) << "deletion" << setColor() << ", " << setColor(foreColors[3]) << "fin" << setColor() << ")" << endl;
+				cout << "(" << setColor(foreColors[0]) << "base" << setColor() << ", " << setColor(foreColors[1]) << "cover" << setColor() << ", " << setColor(foreColors[2]) << "eliminated" << setColor() << ", " << setColor(foreColors[3]) << "fin" << setColor() << ")" << endl;
 			std::cout << endl;
 		}
 
@@ -282,6 +288,18 @@ namespace SudokuSolving
 			return ret;
 		}
 
+		int getRow(int cell)
+		{
+			return cell / (nn_); // get row index from cell index
+		}
+		int getClm(int cell)
+		{
+			return cell % (nn_); // get column index from cell index
+		}
+		int getBox(int cell)
+		{
+			return (cell / n_) % n_ + n_ * (cell / (nn_*n_)); // get box index from cell index
+		}
 
 	private:
 		struct : public Indexer {
@@ -311,20 +329,10 @@ namespace SudokuSolving
 		}box_indexer;
 	};
 
-
-	int getRow(int cell, int n)
+	std::string descr(Sudoku::Indexer::Type t)
 	{
-		return cell / (n * n); // get row index from cell index
+		return t == Sudoku::Indexer::Type::row ? "r" : t == Sudoku::Indexer::Type::clm ? "c" : "b";
 	}
-	int getClm(int cell, int n)
-	{
-		return cell % (n * n); // get column index from cell index
-	}
-	int getBox(int cell, int n)
-	{
-		return (cell / n) % n + n * (cell / (n * n * n)); // get box index from cell index
-	}
-
 	std::string getTextFromBits(uint16_t bits, int baseIndex)
 	{
 		std::string ret;
@@ -336,14 +344,53 @@ namespace SudokuSolving
 		return ret;
 	}
 
-	bool eliminateHints(Sudoku* s, uint16_t hints, Sudoku::Indexer* indexer0,
+	int eliminateHints(std::vector<Cell>& cells, int nn, uint16_t hints, Sudoku::Indexer* indexer0,
 		Sudoku::Indexer* indexer1 = nullptr, Sudoku::Indexer* indexer2 = nullptr,
-		uint16_t subindex_mask = 0xffff)
+		uint16_t positions = 0xffff)
 	{
-		bool changed_something = false;
+		int numChanges = 0;
+		for (int i = 0; i < nn; i++)
+		{
+			if (((1 << i) & positions) == 0)
+				continue;
+
+			// eliminate hints in first indexer (row propably)
+			if (indexer0)
+			{
+				uint16_t& cellhints = cells[(*indexer0)(i)].hints;
+				if ((cellhints & hints) != 0)
+					numChanges++;
+				cellhints &= ~hints;
+			}
+
+			// eliminate hints in second indexer (column propably)
+			if (indexer1)
+			{
+				uint16_t& cellhints = cells[(*indexer1)(i)].hints;
+				if ((cellhints & hints) != 0)
+					numChanges++;
+				cellhints &= ~hints;
+			}
+
+			// eliminate hints in third indexer (box propably)
+			if (indexer2)
+			{
+				uint16_t& cellhints = cells[(*indexer2)(i)].hints;
+				if ((cellhints & hints) != 0)
+					numChanges++;
+				cellhints &= ~hints;
+			}
+		}
+		return numChanges;
+	}
+	int eliminateHints(Sudoku* s, uint16_t hints, Sudoku::Indexer* indexer0,
+		Sudoku::Indexer* indexer1 = nullptr, Sudoku::Indexer* indexer2 = nullptr,
+		uint16_t positions = 0xffff)
+	{
+		int numChanges = 0;
 		for (int i = 0; i < s->nn(); i++)
 		{
-			if (((1 << i) & subindex_mask) == 0)
+			if (((1 << i) & positions) == 0)
 				continue;
 
 			// eliminate hints in first indexer (row propably)
@@ -351,7 +398,7 @@ namespace SudokuSolving
 			{
 				uint16_t& cellhints = s->cells[(*indexer0)(i)].hints;
 				if ((cellhints & hints) != 0)
-					changed_something = true;
+					numChanges++;
 				cellhints &= ~hints;
 			}
 
@@ -360,7 +407,7 @@ namespace SudokuSolving
 			{
 				uint16_t& cellhints = s->cells[(*indexer1)(i)].hints;
 				if ((cellhints & hints) != 0)
-					changed_something = true;
+					numChanges++;
 				cellhints &= ~hints;
 			}
 
@@ -369,11 +416,11 @@ namespace SudokuSolving
 			{
 				uint16_t& cellhints = s->cells[(*indexer2)(i)].hints;
 				if ((cellhints & hints) != 0)
-					changed_something = true;
+					numChanges++;
 				cellhints &= ~hints;
 			}
 		}
-		return changed_something;
+		return numChanges;
 	}
 	void initialCalcHints(struct Sudoku* s)
 	{
@@ -382,9 +429,9 @@ namespace SudokuSolving
 			if (s->cells[cell].value != 0)
 			{
 				eliminateHints(s, s->cells[cell].value,
-					s->getIndexer(Sudoku::Indexer::Type::row, getRow(cell, s->n())),
-					s->getIndexer(Sudoku::Indexer::Type::clm, getClm(cell, s->n())),
-					s->getIndexer(Sudoku::Indexer::Type::box, getBox(cell, s->n())));
+					s->getIndexer(Sudoku::Indexer::Type::row, s->getRow(cell)),
+					s->getIndexer(Sudoku::Indexer::Type::clm, s->getClm(cell)),
+					s->getIndexer(Sudoku::Indexer::Type::box, s->getBox(cell)));
 			}
 		}
 	}
@@ -474,13 +521,13 @@ namespace SudokuSolving
 		{
 			if (!cells[j])
 				continue;
-			int cr = getRow(j, s->n());
-			int cc = getClm(j, s->n());
-			int cb = getBox(j, s->n());
+			int cr = s->getRow(j);
+			int cc = s->getClm(j);
+			int cb = s->getBox(j);
 			for (int i = 0; i < s->nn() * s->nn(); i++)
 			{
 				auto temp = positions[i];
-				positions[i] = positions[i] && ((cr == getRow(i, s->n())) || (cc == getClm(i, s->n())) || (cb == getBox(i, s->n())));
+				positions[i] = positions[i] && ((cr == s->getRow(i)) || (cc == s->getClm(i)) || (cb == s->getBox(i)));
 				if (temp != positions[i])
 					int idsf = 678;
 			}
@@ -497,11 +544,33 @@ namespace SudokuSolving
 			else if (!positions0[cell] && positions1[cell])
 			{
 				only1[cell] = true;
-				if(breakOnOnly1)
+				if (breakOnOnly1)
 					return false;
 			}
 		}
 		return true;
+	}
+	void subtract(Sudoku* s, Sudoku::Indexer* indexer0, Sudoku::Indexer* indexer1, uint16_t& positions0, uint16_t hintmask = 0xffff)
+	{
+		// sets excactly those positions0 that are not part of indexer1 but have at least one given hint.
+		positions0 = 0x0;
+		for (int i = 0; i < s->nn(); i++)
+		{
+			auto cell = (*indexer0)(i);
+			if (s->cells[cell].hints & hintmask)
+			{
+				uint16_t p = (1u << i);
+				positions0 |= p;
+				for (int j = 0; j < s->nn(); j++)
+				{
+					if ((*indexer1)(j) == cell)
+					{
+						positions0 &= ~p;
+						break;
+					}
+				}
+			}
+		}
 	}
 	uint16_t getPositions(Sudoku* s, Sudoku::Indexer* indexer, uint16_t hints)
 	{
@@ -515,7 +584,40 @@ namespace SudokuSolving
 		}
 		return positions;
 	}
-
+	Sudoku::Indexer* secondHouse(Sudoku* s, Sudoku::Indexer* indexer, uint16_t positions)
+	{
+		// returns the indexer of the second house, all the given positions of the given indexer are in, if there is one.
+		uint16_t secondHouse1 = 0xffff, secondHouse2 = 0xffff;
+		for (int i = 0; i < s->nn(); i++)
+		{
+			if ((positions & (1 << i)) != 0)
+			{
+				switch (indexer->type())
+				{
+					case Sudoku::Indexer::row:
+					case Sudoku::Indexer::clm:
+						secondHouse1 &= (1 << s->getBox((*indexer)(i)));
+						secondHouse2 = 0x0;
+						break;
+					case Sudoku::Indexer::box:
+						secondHouse1 &= (1 << s->getRow((*indexer)(i)));
+						secondHouse2 &= (1 << s->getClm((*indexer)(i)));
+						break;
+				}
+				
+				if (!secondHouse1 && !secondHouse2)
+					return nullptr;
+			}
+		}
+		switch (indexer->type())
+		{
+		case Sudoku::Indexer::row:
+		case Sudoku::Indexer::clm:
+			return s->getIndexer(Sudoku::Indexer::box, get_last_set(secondHouse1));
+		case Sudoku::Indexer::box:
+			return secondHouse1 ? s->getIndexer(Sudoku::Indexer::row, get_last_set(secondHouse1)) : s->getIndexer(Sudoku::Indexer::clm, get_last_set(secondHouse2));;
+		}
+	}
 
 	class SudokuSolver
 	{
@@ -523,84 +625,83 @@ namespace SudokuSolving
 		virtual void apply(Sudoku* s, int maxorder) const = 0;
 	};
 
-	class NakedSolver : public SudokuSolver
+	class LockedSolver : public SudokuSolver
 	{
-	protected:
-		void find_naked(Sudoku* s, Sudoku::Indexer* indexer,
-			int z, int m, std::vector<uint16_t>& results,
-			uint16_t hints = 0x0, uint16_t positions = 0x0, int start_subindex = 0) const
+		struct lockedResult
 		{
-			if (z == 0)
+			Sudoku::Indexer* indexer;
+			uint16_t hints;
+			uint16_t positions;
+		};
+	protected:
+		void find_locked(Sudoku* s, Sudoku::Indexer* indexer, std::vector<lockedResult>& results) const
+		{
+			for (short h = 0; h < s->nn(); h++)
 			{
-				results.push_back(hints);
-				results.push_back(positions);
-				return;
-			}
-
-			for (short i = start_subindex; i < s->nn(); i++)
-			{
-				if (s->cells[(*indexer)(i)].hints == 0x0)
+				uint16_t thisPositions = getPositions(s, indexer, (1 << h));
+				if (thisPositions == 0x0)
 					continue;
 
-				// merge hints in structure of given indexer
-				uint16_t newhints = hints | s->cells[(*indexer)(i)].hints;
-				if (count_bit(newhints) > m)
-					continue;
-
-				uint16_t newpositions = positions | (1 << i);
-
-				find_naked(s, indexer, z - 1, m, results, newhints, newpositions, i + 1);
+				// watch out for a second house all occurences of hint h are contained in.
+				if (auto indexer2 = secondHouse(s, indexer, thisPositions))
+				{
+					uint16_t locked_positions;
+					subtract(s, indexer2, indexer, locked_positions, 1u << h);
+					if(locked_positions)
+						results.push_back({ indexer2, 1u << h, locked_positions });
+				}
 			}
 		}
-		void handle_naked(Sudoku* s, Sudoku::Indexer* indexer,
-			uint16_t positions, uint16_t hints, bool& changed, int iter) const
+		void handle_locked(Sudoku* s, const lockedResult& r, bool& changed, int iter) const
 		{
-			// erase those hints from elsewhere in the structure
-			if ((positions & (positions - 1)) == 0) /// only one bit set?
+			// erase every other hints from these positions
+			if ((r.positions & (r.positions - 1)) == 0) /// only one bit set?
 			{
-				int cell = (*indexer)(get_last_set(positions));
-				s->cells[cell].value = hints;
-				eliminateHints(s, hints,
-					s->getIndexer(Sudoku::Indexer::Type::row, getRow(cell, s->n())),
-					s->getIndexer(Sudoku::Indexer::Type::clm, getClm(cell, s->n())),
-					s->getIndexer(Sudoku::Indexer::Type::box, getBox(cell, s->n())));
+				int cell = (*r.indexer)(get_last_set(r.positions));
+				s->cells[cell].value = r.hints;
+				s->cells[cell].hints = 0x0;
+				eliminateHints(s, r.hints,
+					s->getIndexer(Sudoku::Indexer::Type::row, s->getRow(cell)),
+					s->getIndexer(Sudoku::Indexer::Type::clm, s->getClm(cell)),
+					s->getIndexer(Sudoku::Indexer::Type::box, s->getBox(cell)));
 				changed = true;
-				std::cout << " -> set " << getTextFromBits(hints, 1);
-				s->markers[{getClm(cell, s->n()), getRow(cell, s->n()), 0}] = { iter - 1 };
+				std::cout << " -> set " << getTextFromBits(r.hints, 1);
+				s->markers[{s->getClm(cell), s->getRow(cell), 0}] = { iter - 1 };
 			}
 			else
-				changed |= eliminateHints(s, hints, indexer, nullptr, nullptr, ~positions);
+			{
+				int nelims = eliminateHints(s, r.hints, r.indexer, nullptr, nullptr, r.positions);
+				changed |= (bool)nelims;
+				std::cout << " -> eliminate " << nelims << " occurences";
+			}
 		}
 
 	public:
 		void apply(Sudoku* s, int maxorder) const override
 		{
-			/// are there m cells in a structure that share z <= m hints? Then remove these hints from elsewhere in the structure (here: m = z)
+			/// are there z hints in a structure that distribute over m <= z cells?
 			s->markers.clear();
-			std::vector<uint16_t> results; // first the hints, second sub-index positions
+			std::vector<lockedResult> results;
 			bool changed = true;
 			int iter = 1;
 			while (changed)
 			{
 				changed = false;
-				for (int z = 1; z <= 8; z++)
+				for (Sudoku::Indexer::Type t : s->types)
 				{
-					for (Sudoku::Indexer::Type t : s->types)
+					for (int j = 0; j < s->nn(); j++)
 					{
-						for (int j = 0; j < s->nn(); j++)
+						// look for hidden z-tuples in j'th structure of type t
+						Sudoku::Indexer* indexer = s->getIndexer(t, j);
+						find_locked(s, indexer, results);
+						for (auto& r : results)
 						{
-							// look for naked z-tuples in j'th structure of type t
-							Sudoku::Indexer* indexer = s->getIndexer(t, j);
-							find_naked(s, indexer, z, z, results);
-							for (int r = 0; r < results.size() / 2; r += 2)
-							{
-								std::cout << "found naked " << z << " in " << (t == Sudoku::Indexer::Type::row ? "row" : t == Sudoku::Indexer::Type::clm ? "column" : "box")
-									<< j << ": hints " << getTextFromBits(results[r], 1) << " on pos " << getTextFromBits(results[r + 1], 0);
-								handle_naked(s, indexer, results[r + 1], results[r], changed, iter);
-								std::cout << std::endl;
-							}
-							results.clear();
+							std::cout << "found Locked Candidates in " << descr(t) << j + 1 << "/" << descr(r.indexer->type()) << r.indexer->j() + 1
+								<< ": hints " << getTextFromBits(r.hints, 1) << " on pos " << getTextFromBits(r.positions, 1);
+							handle_locked(s, r, changed, iter);
+							std::cout << std::endl;
 						}
+						results.clear();
 					}
 				}
 				iter++;
@@ -612,7 +713,8 @@ namespace SudokuSolving
 	class HiddenSolver : public SudokuSolver
 	{
 	protected:
-		void find_hidden(Sudoku* s, Sudoku::Indexer* indexer, int z, int m, std::vector<uint16_t>& results, uint16_t hints = 0x0, uint16_t positions = 0x0, int start_hint = 0) const
+		void find_hidden(Sudoku* s, Sudoku::Indexer* indexer, int z, int m, std::vector<uint16_t>& results,
+			uint16_t hints = 0x0, uint16_t positions = 0x0, int start_hint = 0) const
 		{
 			if (z == 0)
 			{
@@ -627,14 +729,14 @@ namespace SudokuSolving
 				if (thisPositions == 0x0)
 					continue;
 
-				// merge positions in structure of given indexer
+				// merge positions in house of given indexer
 				uint16_t newpositions = positions | thisPositions;
-				if (count_bit(newpositions) > m)
+				auto nposis = count_bit(newpositions);
+		
+				if (nposis > m)
 					continue;
 
-				uint16_t newhints = hints | (1 << h);
-
-				find_hidden(s, indexer, z - 1, m, results, newhints, newpositions, h + 1);
+				find_hidden(s, indexer, z - 1, m, results, hints | (1 << h), newpositions, h + 1);
 			}
 		}
 		void handle_hidden(Sudoku* s, Sudoku::Indexer* indexer, uint16_t positions, uint16_t hints, bool& changed, int iter) const
@@ -646,12 +748,12 @@ namespace SudokuSolving
 				s->cells[cell].value = hints;
 				s->cells[cell].hints = 0x0;
 				eliminateHints(s, hints,
-					s->getIndexer(Sudoku::Indexer::Type::row, getRow(cell, s->n())),
-					s->getIndexer(Sudoku::Indexer::Type::clm, getClm(cell, s->n())),
-					s->getIndexer(Sudoku::Indexer::Type::box, getBox(cell, s->n())));
+					s->getIndexer(Sudoku::Indexer::Type::row, s->getRow(cell)),
+					s->getIndexer(Sudoku::Indexer::Type::clm, s->getClm(cell)),
+					s->getIndexer(Sudoku::Indexer::Type::box, s->getBox(cell)));
 				changed = true;
 				std::cout << " -> set " << getTextFromBits(hints, 1);
-				s->markers[{getClm(cell, s->n()), getRow(cell, s->n()), 0}] = { iter - 1 };
+				s->markers[{s->getClm(cell), s->getRow(cell), 0}] = { iter - 1 };
 			}
 			else
 				changed |= eliminateHints(s, ~hints, indexer, nullptr, nullptr, positions);
@@ -661,6 +763,7 @@ namespace SudokuSolving
 		void apply(Sudoku* s, int maxorder) const override
 		{
 			/// are there z hints in a structure that distribute over m <= z cells?
+			std::string subsetNames[] = { "Single", "Pair", "Triple", "Quadrupel", "Quintuple", "Sextuple", "Septuple", "Octuple" };
 			s->markers.clear();
 			std::vector<uint16_t> results; // first the hints, second sub-index positions
 			bool changed = true;
@@ -679,8 +782,8 @@ namespace SudokuSolving
 							find_hidden(s, indexer, z, z, results);
 							for (int r = 0; r < results.size() / 2; r += 2)
 							{
-								std::cout << "found hidden " << z << " in " << (t == Sudoku::Indexer::Type::row ? "row" : t == Sudoku::Indexer::Type::clm ? "column" : "box")
-									<< j << ": hints " << getTextFromBits(results[r], 1) << " on pos " << getTextFromBits(results[r + 1], 0);
+								std::cout << "found Hidden " << subsetNames[z-1] << " in " << descr(t)
+									<< j + 1 << ": hints " << getTextFromBits(results[r], 1) << " on pos " << getTextFromBits(results[r + 1], 1);
 								handle_hidden(s, indexer, results[r + 1], results[r], changed, iter);
 								std::cout << std::endl;
 							}
@@ -693,6 +796,97 @@ namespace SudokuSolving
 		}
 
 	};
+
+	class NakedSolver : public SudokuSolver
+	{
+	protected:
+		void find_naked(Sudoku* s, Sudoku::Indexer* indexer,
+			int z, int m, std::vector<uint16_t>& results,
+			uint16_t hints = 0x0, uint16_t positions = 0x0, int start_j = 0) const
+		{
+			if (z == 0)
+			{
+				results.push_back(hints);
+				results.push_back(positions);
+				return;
+			}
+
+			for (short j = start_j; j < s->nn(); j++)
+			{
+				if (s->cells[(*indexer)(j)].hints == 0x0)
+					continue;
+
+				// merge hints in structure of given indexer
+				uint16_t newhints = hints | s->cells[(*indexer)(j)].hints;
+				auto nhints = count_bit(newhints);
+				if (nhints > m)
+					continue;
+
+				find_naked(s, indexer, z - 1, m, results, newhints, positions | (1 << j), j + 1);
+			}
+		}
+		void handle_naked(Sudoku* s, Sudoku::Indexer* indexer,
+			uint16_t positions, uint16_t hints, bool& changed, int iter) const
+		{
+			// erase those hints from elsewhere in the structure
+			if ((positions & (positions - 1)) == 0) /// only one bit set?
+			{
+				int cell = (*indexer)(get_last_set(positions));
+				s->cells[cell].value = hints;
+				eliminateHints(s, hints,
+					s->getIndexer(Sudoku::Indexer::Type::row, s->getRow(cell)),
+					s->getIndexer(Sudoku::Indexer::Type::clm, s->getClm(cell)),
+					s->getIndexer(Sudoku::Indexer::Type::box, s->getBox(cell)));
+				changed = true;
+				std::cout << " -> set " << getTextFromBits(hints, 1);
+				s->markers[{s->getClm(cell), s->getRow(cell), 0}] = { iter - 1 };
+			}
+			else
+			{
+				int nelims = eliminateHints(s, hints, indexer, nullptr, nullptr, ~positions);
+				changed |= (bool)nelims;
+				std::cout << " -> eliminate " << nelims << " occurences";
+			}
+		}
+
+	public:
+		void apply(Sudoku* s, int maxorder) const override
+		{
+			/// are there m cells in a structure that share z <= m hints? Then remove these hints from elsewhere in the structure (here: m = z)
+			std::string subsetNames[] = { "Single", "Pair", "Triple", "Quadrupel", "Quintuple", "Sextuple", "Septuple", "Octuple" };
+			s->markers.clear();
+			std::vector<uint16_t> results; // first the hints, second sub-index positions
+			bool changed = true;
+			int iter = 1;
+			while (changed)
+			{
+				changed = false;
+				for (int z = 1; z <= maxorder; z++)
+				{
+					for (Sudoku::Indexer::Type t : s->types)
+					{
+						for (int j = 0; j < s->nn(); j++)
+						{
+							// look for naked z-tuples in j'th structure of type t
+							Sudoku::Indexer* indexer = s->getIndexer(t, j);
+							find_naked(s, indexer, z, z, results);
+							for (int r = 0; r < results.size() / 2; r += 2)
+							{
+								std::cout << "found Naked " << subsetNames[z - 1] << " in " << descr(t)
+									<< j + 1 << ": hints " << getTextFromBits(results[r], 1) << " on pos " << getTextFromBits(results[r + 1], 1);
+								handle_naked(s, indexer, results[r + 1], results[r], changed, iter);
+								std::cout << std::endl;
+							}
+							results.clear();
+						}
+					}
+				}
+				iter++;
+			}
+		}
+
+	};
+
 	class FishSolver : public SudokuSolver
 	{
 		struct fishResult
@@ -706,12 +900,14 @@ namespace SudokuSolving
 
 		void find_fish(Sudoku* s, uint16_t hints, int z, int m, std::vector<bool> positions,
 			std::deque<std::pair<Sudoku::Indexer::Type, int>> sets, std::vector<fishResult>& results,
-			std::vector<std::pair<Sudoku::Indexer::Type, int>>& locations, bool finned, const int maxnum = -1, bool cover = false, int start_j = 0) const
+			std::vector<std::pair<Sudoku::Indexer::Type, int>>& locations, bool finned, bool franken, int& ncombis,
+			const int maxnum = -1, bool cover = false, std::array<int, 3> start_j = { 0,0,0 }, uint32_t baseSets = 0x0) const
 		{
 			if (z == 0)
 			{
 				if (cover)
 				{
+					ncombis++;
 					// do the cover sets cover all given hints in the base sets?
 					auto onlyCover = std::vector<bool>(s->nn() * s->nn(), false);
 					auto onlyBase = std::vector<bool>(s->nn() * s->nn(), false);
@@ -742,8 +938,10 @@ namespace SudokuSolving
 							for (auto& se : sets)
 								if (se.first == Sudoku::Indexer::row)
 									s->markers[{-1, se.second, 0}] = { 0 };
-								else
+								else if(se.first == Sudoku::Indexer::clm)
 									s->markers[{se.second, -1, 0}] = { 0 };
+								else
+									s->markers[{-1, -1, se.second}] = { 0 };
 
 							results.push_back({ onlyCover,count(onlyBase) });
 							for (int zz = 0; zz < 2 * m; zz++)
@@ -763,20 +961,24 @@ namespace SudokuSolving
 
 					z = m;
 					cover = true;
-					start_j = 0;
+					start_j[0] = start_j[1] = start_j[2] = 0;
 				}
 			}
+
 			// for every structure
 			for (Sudoku::Indexer::Type t : s->types)
 			{
-				if (t == Sudoku::Indexer::Type::box) // TODO fishes with boxes are not (yet) supported
+				if (!franken && t == Sudoku::Indexer::Type::box) // without franken, dont consider for boxes
 					continue;
-				if (!cover && !sets.empty() && t != sets[0].first) // dont allow base sets to be of more than one type
-					continue;
-				if (cover && t == sets[0].first) // dont allow base- and cover-sets to be of same type
-					continue;
-				for (int j = start_j; j < s->nn(); j++)
+				//if (!cover && !sets.empty() && t != sets[0].first) // dont allow base sets to be of more than one type
+				//	continue;
+				//if (cover && t == sets[0].first) // dont allow base- and cover-sets to be of same type
+				//	continue;
+				for (int j = start_j[t]; j < s->nn(); j++)
 				{
+					if (cover && (baseSets & (1 << (j + t * s->nn()))))
+						continue;
+
 					// get indexer
 					Sudoku::Indexer* indexer = s->getIndexer(t, j);
 
@@ -792,10 +994,9 @@ namespace SudokuSolving
 
 					auto newSets = sets;
 					newSets.push_back({ t, j });
-
+					start_j[t] = j;
 					// go on to find next structure
-					find_fish(s, hints, z - 1, m, newpositions, newSets, results, locations, finned, maxnum, cover, j + 1);
-
+					find_fish(s, hints, z - 1, m, newpositions, newSets, results, locations, finned, franken, ncombis, maxnum, cover, start_j, cover ? baseSets : baseSets | (1<<(j+t*s->nn())));
 					newSets.pop_back();
 
 					if (results.size() == maxnum)
@@ -807,6 +1008,7 @@ namespace SudokuSolving
 		void handle_fish(Sudoku* s, std::vector<bool> positions, uint16_t hints, bool& changed) const
 		{
 			// erase every other hints from these positions
+			std::cout << " -> eliminate " << count(positions) << " occurences";
 			for (int cell = 0; cell < s->nn() * s->nn(); cell++)
 			{
 				if (positions[cell])
@@ -820,14 +1022,14 @@ namespace SudokuSolving
 					// set
 					if ((cellhints & (cellhints - 1)) == 0) /// only one bit set?
 					{
-						std::cout << " -> set " << getTextFromBits(cellhints, 1) << " at r" << getRow(cell, s->n())+1 << "c" << getClm(cell, s->n())+1;
-						s->markers[{getClm(cell, s->n()), getRow(cell, s->n()), 0}] = { 0 };
+						std::cout << " -> set " << getTextFromBits(cellhints, 1) << " at r" << s->getRow(cell) + 1 << "c" << s->getClm(cell) + 1;
+						s->markers[{s->getClm(cell), s->getRow(cell), 0}] = { 0 };
 
 						s->cells[cell].value = cellhints;
 						eliminateHints(s, cellhints,
-							s->getIndexer(Sudoku::Indexer::Type::row, getRow(cell, s->n())),
-							s->getIndexer(Sudoku::Indexer::Type::clm, getClm(cell, s->n())),
-							s->getIndexer(Sudoku::Indexer::Type::box, getBox(cell, s->n())));
+							s->getIndexer(Sudoku::Indexer::Type::row, s->getRow(cell)),
+							s->getIndexer(Sudoku::Indexer::Type::clm, s->getClm(cell)),
+							s->getIndexer(Sudoku::Indexer::Type::box, s->getBox(cell)));
 						changed = true;
 					}
 				}
@@ -840,7 +1042,7 @@ namespace SudokuSolving
 		{
 			std::string fishnames[] = { "X-Wing", "Swordfish", "Jellyfish" };
 			s->markers.clear();
-			std::vector<fishResult> results; 
+			std::vector<fishResult> results;
 			std::vector<std::pair<Sudoku::Indexer::Type, int>> locs;
 
 			bool changed = true;
@@ -854,26 +1056,45 @@ namespace SudokuSolving
 						std::cout << "Maximal fish order is 4. For 9x9 Sudokus this covers all cases. See http://hodoku.sourceforge.net/de/tech_fishb.php#bf5" << std::endl;
 						break;
 					}
+					int ncombis = 0;
+					int searchMS = 0;
 					for (short h = 0; h < s->nn(); h++)
 					{
-						find_fish(s, (1 << h), z, z, std::vector<bool>(s->nn() * s->nn(), false), {}, results, locs, true, 1);
+						auto startT = std::chrono::high_resolution_clock::now();
+						/*if (z == 4)
+						{
+							h = 8;
+						}*/
+						find_fish(s, (1 << h), z, z, std::vector<bool>(s->nn() * s->nn(), false), {}, results, locs, true, true, ncombis, 1);
+						searchMS += std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - startT).count();
 						for (int r = 0; r < results.size(); r += 1)
 						{
-							std::cout << "found " << fishnames[z - 2] << " (" << z << ") " << (results[r].finns == 0 ? "" : "with " + std::to_string(results[r].finns) + " finns ") << "of hint " << (h + 1) << " in ";
+							std::cout << "Order " << z << " - search (until hit) took " << searchMS << " ms (" << ncombis << " combinations)" << std::endl;
+							std::string attribute = (results[r].finns == 0 ? "" : std::to_string(results[r].finns) + "-finned "), sets;
 							std::string oldtype, type;
-							for (int zz = 0; zz < 2 * z; zz++)
+							int category = 0; unsigned flags=0;
+							for (int zz = 0; zz <= 2 * z; zz++)
 							{
+								if (zz % z == 0)
+								{
+									category = max(max(category, flags&4), 2*(flags % 4 == 3)); // try to distinguish franken from mutant fish
+								}
 								if (zz == z)
 								{
-									std::cout << "/";
+									sets += "/";
 									oldtype = "";
+									flags = 0;
 								}
+								if (zz == 2 * z)
+									break;
 								auto t = locs[r * 2 * z + zz].first;
-								type = (t == Sudoku::Indexer::Type::row ? "r" : t == Sudoku::Indexer::Type::clm ? "c" : "b");
-								std::cout << (type != oldtype ? type : "") << locs[r * 2 * z + zz].second+1;
+								flags |= (1u << t);
+								type = descr(t);
+								sets += (type != oldtype ? type : "") + std::to_string(locs[r * 2 * z + zz].second + 1);
 								oldtype = type;
 							}
-							std::cout << " eliminate " << count(results[r].positions) << " occurences";
+							attribute = attribute + (category == 0 ? "" : category == 1 ? "Franken " : "Mutant ");
+							std::cout << "found " << attribute << fishnames[z - 2] << " of hint " << (h + 1) << " in " << sets;
 							handle_fish(s, results[r].positions, (1 << h), changed);
 							std::cout << std::endl;
 							if (changed)
@@ -882,10 +1103,51 @@ namespace SudokuSolving
 						results.clear();
 						locs.clear();
 					}
-
+					std::cout << "Order " << z << " - search took " << searchMS << " ms  (" << ncombis << " combinations)" << std::endl;
 				}
 				break;
 			}
+		}
+	};
+
+	class BruteforceSolver : public SudokuSolver
+	{
+		mutable int iters = 0;
+		bool brut(Sudoku* s, const std::vector<Cell>& cells, int startcell) const
+		{
+			iters++;
+			if (startcell == s->nn() * s->nn())
+			{
+				// all cells successfully filled
+				s->cells = cells;
+				return true;
+			}
+			if (cells[startcell].value) return brut(s, cells, startcell + 1);
+			for (int h = 0; h < s->nn(); h++)
+			{
+				if (cells[startcell].hints & (1 << h))
+				{
+					auto cells2 = cells;
+					cells2[startcell].value = (1 << h);
+					eliminateHints(cells2, s->nn(), (1 << h),
+						s->getIndexer(Sudoku::Indexer::Type::row, s->getRow(startcell)),
+						s->getIndexer(Sudoku::Indexer::Type::clm, s->getClm(startcell)),
+						s->getIndexer(Sudoku::Indexer::Type::box, s->getBox(startcell)));
+
+					if (brut(s, cells2, startcell + 1))
+						return true;
+				}
+			}
+			return false;
+		}
+
+	public:
+		void apply(Sudoku* s, int maxorder) const override
+		{
+			if (brut(s, s->cells, 0))
+				std::cout << setColor(lgreen) << "Solution found! Iterations: " << iters << setColor() << std::endl;
+			else
+				std::cout << setColor(lred) << "There is no solution! Iterations: " << iters << setColor() << std::endl;
 		}
 	};
 }
