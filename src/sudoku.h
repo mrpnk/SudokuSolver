@@ -1140,6 +1140,129 @@ namespace SudokuSolving
 		}
 	};
 
+	class UniqueSolver : public SudokuSolver
+	{
+		int additionals(unsigned short h[4])
+		{
+			// finds all cells that have more hints than the other three
+			if (h[0] == h[1])
+			{
+				if (h[2] == h[3])
+				{
+					if (h[1] == h[2])
+					{
+
+					}
+					else
+					{
+
+					}
+				}
+				else
+				{
+					if (h[0] == h[2])
+					{
+						return 3;
+					}
+					else if (h[0] == h[3])
+					{
+						return 2;
+					}
+				}
+			}
+			else
+			{
+				if (h[2] == h[3])
+				{
+					if (h[0] == h[2])
+					{
+						return 1;
+					}
+					else if (h[1] == h[2])
+					{
+						return 0;
+					}
+				}
+				else
+				{
+					
+				}
+			}
+			return -1;
+		}
+		void find_ur(Sudoku* s)
+		{
+			int ur[4];
+			for (int i = 0; i< s->nn(); i++)
+			{
+				auto indexerR1 = s->getIndexer(Sudoku::Indexer::row, i);
+				for (int ii = i+1; ii < s->nn(); ii++)
+				{
+					auto indexerR2 = s->getIndexer(Sudoku::Indexer::row, ii);
+					for (int j = 0; j < s->nn(); j++)
+					{
+						ur[0] = (*indexerR1)(j);
+						ur[1] = (*indexerR2)(j);
+						for (int jj = j + 1; j < s->nn(); j++)
+						{
+							ur[2] = (*indexerR1)(jj);
+							ur[3] = (*indexerR2)(jj);
+							if (count_bit((1 << s->getBox(ur[0])) |
+								(1 << s->getBox(ur[1])) |
+								(1 << s->getBox(ur[2])) |
+								(1 << s->getBox(ur[3]))) == 2)
+							{
+								unsigned short hints[4];
+								for(int k = 0;k < 4; k++)
+									hints[k] = s->cells[k].hints;
+								int c = additionals(hints);
+								if (c != -1)
+								{
+
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		void handle_ur(Sudoku* s, std::vector<bool> positions, uint16_t hints, bool& changed) const
+		{
+			// erase every other hints from these positions
+			std::cout << " -> eliminate " << count(positions) << " occurences";
+			for (int cell = 0; cell < s->nn() * s->nn(); cell++)
+			{
+				if (positions[cell])
+				{
+					// erase
+					uint16_t& cellhints = s->cells[cell].hints;
+					if ((cellhints & ~hints) != 0)
+						changed = true;
+					cellhints &= ~hints;
+
+					// set
+					if ((cellhints & (cellhints - 1)) == 0) /// only one bit set?
+					{
+						std::cout << " -> set " << getTextFromBits(cellhints, 1) << " at r" << s->getRow(cell) + 1 << "c" << s->getClm(cell) + 1;
+						s->markers[{s->getClm(cell), s->getRow(cell), 0}] = { 0 };
+
+						s->cells[cell].value = cellhints;
+						eliminateHints(s, cellhints,
+							s->getIndexer(Sudoku::Indexer::Type::row, s->getRow(cell)),
+							s->getIndexer(Sudoku::Indexer::Type::clm, s->getClm(cell)),
+							s->getIndexer(Sudoku::Indexer::Type::box, s->getBox(cell)));
+						changed = true;
+					}
+				}
+			}
+		}
+
+	public: 
+		void apply(Sudoku* s, int maxorder) const override
+		{
+			
+		}
+	};
 	class BruteforceSolver : public SudokuSolver
 	{
 		mutable int iters = 0;
