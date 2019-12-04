@@ -113,13 +113,14 @@ int main(int argc, char* argv[])
 		HiddenSolver	hiddensol; 
 		NakedSolver		nakedsol;
 		FishSolver		fishsol;
+		UniqueSolver	unisol;
 		BruteforceSolver brutsol;
 
 		// Interactively solve the Sudoku:
 		std::string input;
 		while (!s.isSolved())
 		{
-			std::cout << "Choose solving technique... (l = locked, h = hidden, n = naked, f = fish, b = bruteforce)" << std::endl;
+			std::cout << "Choose solving technique..." << std::endl;
 			std::getline(std::cin, input);
 			if (input == "")
 				continue;
@@ -146,12 +147,19 @@ int main(int argc, char* argv[])
 			{
 				fishsol.apply(&s, order);
 			}
+			else if (input[0] == 'u')
+			{
+				unisol.apply(&s, order);
+			}
 			else if (input[0] == 'b')
 			{
 				brutsol.apply(&s, order);
 			}
 			else
+			{
+				std::cout << "(l = locked, h = hidden, n = naked, f = fish, u = uniqueness, b = bruteforce)" << std::endl;
 				continue;
+			}
 
 			if(s.getNumValues() - v0 > 0)
 				s.out();
