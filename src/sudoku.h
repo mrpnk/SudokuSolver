@@ -15,8 +15,8 @@
 namespace sudoku
 {
 	using index_t = unsigned short; // Must be able to address all n^2 cells.
-	using candidates_t = uint16_t; // Candidates are the single bits.
-	using positions_t = uint16_t; // Positions [0,n) are the single bits.
+	using candidates_t = uint16_t;  // Candidates are the single bits.
+	using positions_t = uint16_t;   // Positions [0,n) are the single bits.
 
 	// Returns the number of bits in x.
 	constexpr uint16_t bitcount(uint16_t x)
@@ -254,19 +254,6 @@ namespace sudoku
 		}
 
 
-		// Returns a pointer to the j'th indexer of type t.
-		const Indexer* getIndexer(Indexer::Type t, index_t j) const
-		{
-			if (t == Indexer::Type::row)
-				return &row_indexer[j];
-			else if (t == Indexer::Type::clm)
-				return &clm_indexer[j];
-			else if (t == Indexer::Type::box)
-				return &box_indexer[j];
-			else return nullptr;
-		}
-
-
 		// Loads from a text file. Returns if an error occured.
 		bool loadFromFile(std::string filename)
 		{
@@ -307,6 +294,7 @@ namespace sudoku
 			}
 		}
 
+
 		// Returns if all cells of this sudoku have values.
 		bool isSolved() const
 		{
@@ -324,6 +312,7 @@ namespace sudoku
 				ret += (a.value != 0);
 			return ret;
 		}
+
 		// Returns the total number of open candidates in all cells.
 		int getNumCandidates() const
 		{
@@ -331,6 +320,18 @@ namespace sudoku
 			for (auto& a : cells)
 				ret += bitcount(a.candidates);
 			return ret;
+		}
+
+		// Returns a pointer to the j'th indexer of type t.
+		const Indexer* getIndexer(Indexer::Type t, index_t j) const
+		{
+			if (t == Indexer::Type::row)
+				return &row_indexer[j];
+			else if (t == Indexer::Type::clm)
+				return &clm_indexer[j];
+			else if (t == Indexer::Type::box)
+				return &box_indexer[j];
+			else return nullptr;
 		}
 
 		// Returns the row index from cell index.
@@ -417,7 +418,7 @@ namespace sudoku
 	}
 
 	// Eliminate all given candidates in all given positions in all given indexers.
-	int eliminateCandidates(Sudoku* s, uint16_t candidates, std::vector<const Sudoku::Indexer*> indexers, uint16_t positions = 0xffff)
+	int eliminateCandidates(Sudoku* s, candidates_t candidates, std::vector<const Sudoku::Indexer*> indexers, uint16_t positions = -1)
 	{
 		int numChanges = 0;
 		for (int i = 0; i < s->nn(); i++)
@@ -451,8 +452,8 @@ namespace sudoku
 		}
 	}
 
-	// Check if any of the given candidates are in intersections between the two given houses.
-	bool intersects(Sudoku* s, const Sudoku::Indexer* indexer0, const Sudoku::Indexer* indexer1, uint16_t candidates)
+	// Returns if any of the given candidates are in the intersection of the two given houses.
+	bool intersects(Sudoku* s, const Sudoku::Indexer* indexer0, const Sudoku::Indexer* indexer1, candidates_t candidates)
 	{
 		for (int i0 = 0; i0 < s->nn(); i0++)
 		{
@@ -468,9 +469,10 @@ namespace sudoku
 		}
 		return false;
 	}
-	bool intersects(Sudoku* s, const Sudoku::Indexer* indexer0, dyn_bs positions, uint16_t candidates)
+
+	// Returns if any of the given candidates are in the intersections of the house and the positions.
+	bool intersects(Sudoku* s, const Sudoku::Indexer* indexer0, dyn_bs const& positions, candidates_t candidates)
 	{
-		// check if any of the given candidates are in intersections between structures
 		for (int i0 = 0; i0 < s->nn(); i0++)
 		{
 			int index0 = (*indexer0)(i0);
@@ -479,27 +481,12 @@ namespace sudoku
 				if ((s->cells[index0].candidates & candidates) != 0x0)
 					return true;
 			}
-
 		}
 		return false;
 	}
-	bool intersects(dyn_bs positions0, dyn_bs positions1)
-	{
-		// check if any of the given candidates are in intersection
-		for (int cell = 0; cell < positions0.size(); cell++)
-		{
-			if (positions0[cell] && positions1[cell])
-			{
-				return true;
-			}
-
-		}
-		return false;
-	}
-
 
 	// check if any of the given candidates are in intersections between structures
-	dyn_bs merge(Sudoku* s, const Sudoku::Indexer* indexer0, dyn_bs positions, uint16_t candidates)
+	dyn_bs merge(Sudoku* s, const Sudoku::Indexer* indexer0, dyn_bs positions, candidates_t candidates)
 	{
 		dyn_bs ret = positions;
 		for (int i0 = 0; i0 < s->nn(); i0++)
@@ -531,12 +518,11 @@ namespace sudoku
 	}
 
 	// Sets positions to the cells that are visible by all given cells.
-	void visible(const Sudoku* s, std::set<index_t> const& cells, std::set<index_t>& out_positions, bool includeCells)
+	void visible(const Sudoku* s, std::vector<index_t> const& cells, std::vector<index_t>& out_positions, bool includeCells)
 	{
 		assert(cells.size() <= 16);
 		std::map<index_t, index_t> os;
-		int j = 0;
-		for (auto c : cells)
+		for (int j = 0; auto c : cells)
 		{
 			for (auto t : s->types)
 			{
@@ -547,8 +533,8 @@ namespace sudoku
 			j++;
 		}
 		for (auto& a : os)
-			if (bitcount(a.second) == cells.size() && (!cells.contains(a.first) || includeCells))
-				out_positions.insert(a.first);
+			if (bitcount(a.second) == cells.size() && (std::find(std::begin(cells),std::end(cells),a.first)==std::end(cells) || includeCells))
+				out_positions.push_back(a.first);
 	}
 
 	// Returns if set 1 is entirely in set 0.
@@ -656,21 +642,21 @@ namespace sudoku
 		}
 	}
 
-	// Returns the image of the bit positions under f[].
-	template<typename T>
-	std::set<T> bitindex(T* f, candidates_t idx, index_t max = 16)
+	// Returns the image of the bit positions under arr[].
+	template<index_t max, typename T>
+	std::vector<T> bitindex(T arr[], candidates_t candidates)
 	{
-		std::set<T> ret;
+		std::vector<T> ret;
 		for (index_t i = 0; i < max; i++)
 		{
-			if (idx & (1ul << i))
-				ret.insert(f[i]);
+			if (candidates & (1ul << i))
+				ret.push_back(arr[i]);
 		}
 		return ret;
 	}
 
 	// Returns the intersection of all given bitmasks.
-	candidates_t bitintersection(std::set<candidates_t> hs)
+	candidates_t bitintersection(std::vector<candidates_t> hs)
 	{
 		candidates_t ret = std::numeric_limits<int>::max();
 		for (const auto& s : hs)
@@ -679,7 +665,7 @@ namespace sudoku
 	}
 
 	// Returns the union of all given bitmasks.
-	candidates_t bitunion(std::set<candidates_t> hs)
+	candidates_t bitunion(std::vector<candidates_t> hs)
 	{
 		candidates_t ret = 0x0;
 		for (const auto& s : hs)
@@ -1204,12 +1190,12 @@ namespace sudoku
 	{
 		struct urResult
 		{
-			positions_t urrows;
-			positions_t urclms;
-			candidates_t urcandidates;
-			int urtype;
-			std::set<index_t> ercells;
-			candidates_t ercandidates;
+			positions_t          urrows;
+			positions_t          urclms;
+			candidates_t         urcandidates;
+			int                  urtype;
+			std::vector<index_t> ercells;
+			candidates_t         ercandidates;
 		};
 
 		// Finds all cells that have more candidates than the other three.
@@ -1248,13 +1234,13 @@ namespace sudoku
 										(1ul << s->getBox(ur[2])) |
 										(1ul << s->getBox(ur[3]))) == 2) // only two boxed covered?
 							{
-								candidates_t candidates[4],urcandidates;
+								candidates_t candidates[4], urcandidates;
 								for(int k = 0; k < 4; k++)
 									candidates[k] = s->cells[ur[k]].candidates;
 
-								positions_t extraPositions = excessCells(candidates,urcandidates);
+								positions_t extraPositions = excessCells(candidates, urcandidates);
 
-								if(bitcount(urcandidates) == 2)
+								if(bitcount(urcandidates) == 2){
 									switch(extraPositions)
 									{
 									case 1:
@@ -1271,19 +1257,21 @@ namespace sudoku
 									case 10:
 									case 12:
 										// type 2
-										if(bitcount(bitunion(bitindex(candidates,extraPositions,4)) & ~urcandidates) == 1) // only one extra candidate?
+										auto exx = bitindex<4>(candidates, extraPositions);
+										if(bitcount(bitunion(exx) & ~urcandidates) == 1) // only one extra candidate?
 										{
-											if(candidates_t extraCandidates = bitintersection(bitindex(candidates,extraPositions,4)) & ~urcandidates)
+											if(candidates_t extraCandidates = bitintersection(exx) & ~urcandidates)
 											{
-												std::set<index_t> visiblePositions;
-												visible(s,bitindex(ur,extraPositions,4),visiblePositions,false);
+												std::vector<index_t> delpos;
+												visible(s, bitindex<4>(ur, extraPositions), delpos, false);
 												results.push_back({static_cast<positions_t>((1ul << i) | (1ul << ii)),
 																   static_cast<positions_t>((1ul << j) | (1ul << jj)),
-																   urcandidates, 2, visiblePositions, extraCandidates});
+																   urcandidates, 2, delpos, extraCandidates});
 											}
 										}
 										break;
 									}
+								}
 							}
 						}
 					}

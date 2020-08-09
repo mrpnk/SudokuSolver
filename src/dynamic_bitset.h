@@ -56,6 +56,21 @@ public:
 		}
 		return s;
 	}
+
+	bool intersects(dynamic_bitset const& r) const
+	{
+		assert(v.size()==r.v.size());
+		for (size_t i = 0; i < v.size(); ++i)
+		{
+			if (v[i]&&r.v[i])
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+
 };
 
 
