@@ -1,5 +1,7 @@
+#include <vector>
+#include <cassert>
 
-
+// At the moment just a wrapper around std::vector<bool>. TOOD: make it better!
 template<int block>
 class dynamic_bitset{
 
@@ -34,23 +36,23 @@ public:
 	}
 
 	bool any() const {
-		for (bool b : v)
-			if (b)
+		for(bool b : v)
+			if(b)
 				return true;
 		return false;
 	}
 
 	int popcount() const {
 		int count{ 0 };
-		for (const auto& a : v)
-			if (a) count++;
+		for(const auto& a : v)
+			if(a) count++;
 
 		return count;
 	}
 
 	std::string to_string() const{
 		std::string s(v.size(),'.');
-		for(int i=0;bool b : v){
+		for(size_t i=0;bool b : v){
 			if(b)s[i]='X';
 			++i;
 		}
@@ -60,16 +62,15 @@ public:
 	bool intersects(dynamic_bitset const& r) const
 	{
 		assert(v.size()==r.v.size());
-		for (size_t i = 0; i < v.size(); ++i)
+		for(size_t i = 0; i < v.size(); ++i)
 		{
-			if (v[i]&&r.v[i])
+			if(v[i]&&r.v[i])
 			{
 				return true;
 			}
 		}
 		return false;
 	}
-
 
 };
 

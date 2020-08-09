@@ -4,10 +4,9 @@
 #include <string>
 #include <filesystem>
 
-#define NOMINMAX 
-#include "windows.h"
-#ifdef _WINDOWS_
-	
+#if defined (_WIN32)
+	#define NOMINMAX 
+	#include "windows.h"	
 	HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 #endif
 
@@ -35,7 +34,7 @@ colorSetter setColor(color fg = white, color bg = black) { return colorSetter{ f
 
 std::ostream& operator<<(std::ostream& out, const colorSetter& f)
 {
-#ifdef _WINDOWS_
+#ifdef _WIN32
 	SetConsoleTextAttribute(hConsole, f.fg + f.bg * 16);
 #endif
 	return out;
@@ -53,30 +52,25 @@ int main(int argc, char* argv[])
 {
 	using namespace sudoku;
 
-#if defined(_DEBUG)
-	std::cout << "Current path is " << std::filesystem::current_path() << std::endl << std::endl;
-#endif
- 
-	// Load solvers:
-	LockedSolver     lockedsol; 
-	HiddenSolver     hiddensol; 
-	NakedSolver      nakedsol;
-	FishSolver       fishsol;
-	UniqueSolver     unisol;
-	BruteforceSolver brutsol;
-
 	while (true)
 	{
 		// Scan for Sudoku files:
 		std::vector<std::string> files;
-		for (auto& entry : std::filesystem::recursive_directory_iterator(std::filesystem::current_path()))
+		for(auto& entry : std::filesystem::recursive_directory_iterator(std::filesystem::current_path()))
 		{
 			auto filename = entry.path().string();
-			if (filename.rfind(".sudoku") != -1)
+			if(filename.rfind(".sudoku") != -1)
 			{
 				std::cout << files.size() << "   " << entry.path().filename() << std::endl;
 				files.push_back(filename);
 			}
+		}
+
+		if(files.empty()){
+			std::cout << "No .sudoku files found in any subdirectory." << std::endl;
+			std::cout << "Current path is " << std::filesystem::current_path() << std::endl << std::endl;
+			std::cin.get();
+			return 0;
 		}
 
 		// Select file:
@@ -86,10 +80,10 @@ int main(int argc, char* argv[])
 			std::cout << "Choose file..." << std::endl;
 			std::string s;
 			std::getline(std::cin, s);
-			if (is_number(s))
+			if(is_number(s))
 			{
 				int ix = std::stoi(s);
-				if (ix >= 0 && ix < files.size())
+				if(ix >= 0 && ix < files.size())
 				{
 					filename = files[ix];
 					break;
@@ -116,45 +110,44 @@ int main(int argc, char* argv[])
 		{
 			std::cout << "Choose solving technique..." << std::endl;
 			std::getline(std::cin, input);
-			if (input == "")
+			if(input == "")
 				continue;
 			int order = 3;
-			if (input.size() > 1 && std::isdigit(input[1]))
+			if(input.size() > 1 && std::isdigit(input[1]))
 				order = input[1] - '0';
-			std::cout << "maximal order: " << order << std::endl;
 
-			int v0 = s.getNumValues();
-			int h0 = s.getNumCandidates();
-			if (input[0] == 'l')
+			SudokuSolver* solver;
+			if(input[0] == 'l')
 			{
-				lockedsol.apply(&s, order);
+				solver = new LockedSolver();
 			}
-			else if (input[0] == 'h')
+			else if(input[0] == 'h')
 			{
-				hiddensol.apply(&s, order);
+				solver = new HiddenSolver();
 			}
-			else if (input[0] == 'n')
+			else if(input[0] == 'n')
 			{
-				nakedsol.apply(&s, order);
+				solver = new NakedSolver();
 			}
-			else if (input[0] == 'f')
+			else if(input[0] == 'f')
 			{
-				fishsol.apply(&s, order);
+				solver = new FishSolver();
 			}
-			else if (input[0] == 'u')
+			else if(input[0] == 'u')
 			{
-				unisol.apply(&s, order);
+				solver = new UniqueSolver();
 			}
-			else if (input[0] == 'b')
+			else if(input[0] == 'b')
 			{
-				brutsol.apply(&s, order);
+				solver = new BruteforceSolver();
 			}
-			else if (input[0] == 'c')
+			else if(input[0] == 'c')
 			{
 				break;
 			}
-			else if (input[0] == 'q')
+			else if(input[0] == 'q')
 			{
+				std::cout<<"Goodbye..."<<std::endl;
 				return 0;
 			}
 			else
@@ -163,17 +156,26 @@ int main(int argc, char* argv[])
 				continue;
 			}
 
+			int v0 = s.getNumValues();
+			int h0 = s.getNumCandidates();
+
+			std::cout << "Starting " << setColor(green) << solver->name() << setColor() << " with maximal order = " << order << std::endl;
+
+			solver->apply(&s, order);
+			delete solver;
+
 			if(s.getNumValues() - v0 > 0)
-				std::cout<<s.valueRep<<std::endl;
+				std::cout << s.valueRep << std::endl;
 			if(h0 - s.getNumCandidates() > 0 && !s.isSolved())
-				std::cout<<s.candiRep<<std::endl;
+				std::cout << s.candiRep << std::endl;
 
 			std::cout << "Filled " << s.getNumValues() - v0 << " cells." << std::endl;
 			std::cout << "Eliminated " << h0 - s.getNumCandidates() << " candidates." << std::endl;
+			std::cout << std::endl;
 		}
 		if(s.isSolved())
 			std::cout << "Sudoku is solved!" << std::endl << std::endl;
 	}
-	std::cout<<"Goodbye..."<<std::endl;
+	
 	return 0;
 }
