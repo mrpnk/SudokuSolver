@@ -19,6 +19,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\src\dynamic_bitset.h" />
     <ClInclude Include="..\src\sudoku.h" />
   </ItemGroup>
   <ItemGroup>
