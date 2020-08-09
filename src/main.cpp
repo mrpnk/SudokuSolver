@@ -4,9 +4,11 @@
 #include <string>
 #include <filesystem>
 
+#define NOMINMAX 
 #include "windows.h"
 #ifdef _WINDOWS_
-HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+	
+	HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 #endif
 
 enum color
@@ -47,30 +49,30 @@ bool is_number(const std::string& s)
 		s.end(), [](char c) { return !std::isdigit(c); }) == s.end();
 }
 
-
-
 int main(int argc, char* argv[])
 {
-	std::cout << "Current path is " << std::filesystem::current_path() << std::endl << std::endl;
+	using namespace sudoku;
 
-	using namespace SudokuSolving;
-	//for (int i = 0; i < 16; i++)
-	//{
-	//	for (int j = 0; j < 16; j++)
-	//	{
-	//		std::cout << setColor((color)i, (color)j) << "hallo";
-	//	}
-	//	std::cout << std::endl;
-	//}
-	 
+#if defined(_DEBUG)
+	std::cout << "Current path is " << std::filesystem::current_path() << std::endl << std::endl;
+#endif
+ 
+	// Load solvers:
+	LockedSolver     lockedsol; 
+	HiddenSolver     hiddensol; 
+	NakedSolver      nakedsol;
+	FishSolver       fishsol;
+	UniqueSolver     unisol;
+	BruteforceSolver brutsol;
+
 	while (true)
 	{
-		// Scan for sudoku files:
+		// Scan for Sudoku files:
 		std::vector<std::string> files;
-		for (const auto& entry : std::filesystem::directory_iterator(std::filesystem::current_path()))
+		for (auto& entry : std::filesystem::recursive_directory_iterator(std::filesystem::current_path()))
 		{
 			auto filename = entry.path().string();
-			if (filename.rfind(".txt") != -1)
+			if (filename.rfind(".sudoku") != -1)
 			{
 				std::cout << files.size() << "   " << entry.path().filename() << std::endl;
 				files.push_back(filename);
@@ -100,21 +102,13 @@ int main(int argc, char* argv[])
 
 		// Load Sudoku:
 		Sudoku s;
-		if(s.fromFile(filename))
+		if(s.loadFromFile(filename))
 			continue;
 
 		// Print it:
-		s.out();
-		initialCalcHints(&s);
-		s.out_hints();
-
-		// Load solvers:
-		LockedSolver	lockedsol; 
-		HiddenSolver	hiddensol; 
-		NakedSolver		nakedsol;
-		FishSolver		fishsol;
-		UniqueSolver	unisol;
-		BruteforceSolver brutsol;
+		std::cout<<s.valueRep<<std::endl;
+		initialCalcCandidates(&s);
+		std::cout<<s.candiRep<<std::endl;
 
 		// Interactively solve the Sudoku:
 		std::string input;
@@ -130,7 +124,7 @@ int main(int argc, char* argv[])
 			std::cout << "maximal order: " << order << std::endl;
 
 			int v0 = s.getNumValues();
-			int h0 = s.getNumHints();
+			int h0 = s.getNumCandidates();
 			if (input[0] == 'l')
 			{
 				lockedsol.apply(&s, order);
@@ -155,22 +149,31 @@ int main(int argc, char* argv[])
 			{
 				brutsol.apply(&s, order);
 			}
+			else if (input[0] == 'c')
+			{
+				break;
+			}
+			else if (input[0] == 'q')
+			{
+				return 0;
+			}
 			else
 			{
-				std::cout << "(l = locked, h = hidden, n = naked, f = fish, u = uniqueness, b = bruteforce)" << std::endl;
+				std::cout << "(l = locked, h = hidden, n = naked, f = fish, u = uniqueness, b = bruteforce; c = cancel, q = quit)" << std::endl;
 				continue;
 			}
 
 			if(s.getNumValues() - v0 > 0)
-				s.out();
-			if(h0 - s.getNumHints() > 0 && !s.isSolved())
-				s.out_hints();
+				std::cout<<s.valueRep<<std::endl;
+			if(h0 - s.getNumCandidates() > 0 && !s.isSolved())
+				std::cout<<s.candiRep<<std::endl;
 
 			std::cout << "Filled " << s.getNumValues() - v0 << " cells." << std::endl;
-			std::cout << "Eliminated " << h0 - s.getNumHints() << " hints." << std::endl;
+			std::cout << "Eliminated " << h0 - s.getNumCandidates() << " candidates." << std::endl;
 		}
-		std::cout << "Sudoku is solved!" << std::endl << std::endl;
-		std::cin.get();
+		if(s.isSolved())
+			std::cout << "Sudoku is solved!" << std::endl << std::endl;
 	}
+	std::cout<<"Goodbye..."<<std::endl;
 	return 0;
 }
