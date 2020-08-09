@@ -13,9 +13,10 @@ from the 'Solving techniques' section.
 * Hidden Subsets, including Hidden Single
 * Naked Subsets, including Last Digit
 * Fish
-  * Basic Fish: X-Wing (order 2), Swordfish (order 3), Jellyfish (order 4)
+  * Basic Fish: X-Wing (2<sup>nd</sup> order), Swordfish (3<sup>rd</sup> order), Jellyfish (4<sup>th</sup> order)
   * Exo Fins
-  * Franken Fish and Mutant Fish 
+  * Franken Fish and Mutant Fish
+* Unique Rectangle Type 1 & 2
 * Brute Force
 
 #### Planned solving techniques
@@ -23,7 +24,7 @@ from the 'Solving techniques' section.
 * Chains
 * Endo Fins
 * Wings
-* Uniqueness
+* More Uniqueness 
 * Siamese Fish
 
 ### Usage
